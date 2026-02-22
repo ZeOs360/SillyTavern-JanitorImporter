@@ -1,0 +1,22 @@
+{
+  "name": "sillytavern-plugin-janitor-importer",
+  "version": "1.0.0",
+  "description": "Import JanitorAI characters with Cloudflare bypass support",
+  "main": "index.js",
+  "type": "module",
+  "keywords": [
+    "sillytavern",
+    "plugin",
+    "janitorai",
+    "character-import"
+  ],
+  "author": "ZeOs360",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.0",
+    "sanitize-filename": "^1.6.3"
+  },
+  "peerDependencies": {
+    "express": "^4.18.0"
+  }
+}

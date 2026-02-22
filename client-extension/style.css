@@ -1,0 +1,98 @@
+.janitor-cloudflare-bypass h3 {
+    margin-top: 0;
+}
+
+.janitor-cloudflare-bypass h3 i {
+    color: var(--SmartThemeQuoteColor);
+    margin-right: 10px;
+}
+
+.janitor-cloudflare-bypass .alert {
+    padding: 15px;
+    border-radius: 8px;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.chakra-ui-dark .janitor-cloudflare-bypass .alert,
+[data-theme=dark] .janitor-cloudflare-bypass .alert {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.3);
+}
+
+.janitor-cloudflare-bypass .instruction-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: var(--black10a);
+    border-radius: 8px;
+    border-left: 3px solid var(--SmartThemeQuoteColor);
+}
+
+.janitor-cloudflare-bypass .instruction-section h4 {
+    margin-top: 0;
+    color: var(--SmartThemeQuoteColor);
+}
+
+.janitor-cloudflare-bypass .instruction-section h4 i {
+    margin-right: 8px;
+}
+
+.janitor-cloudflare-bypass .code-container {
+    position: relative;
+    background: var(--black50a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    padding: 10px;
+}
+
+.janitor-cloudflare-bypass .code-block {
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    margin: 0;
+    padding: 5px;
+    background: transparent;
+}
+
+.janitor-cloudflare-bypass kbd {
+    background: var(--black50a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.janitor-cloudflare-bypass code {
+    background: var(--black30a);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.janitor-cloudflare-bypass ol {
+    padding-left: 25px;
+}
+
+.janitor-cloudflare-bypass ol li {
+    margin: 8px 0;
+}
+
+.janitor-cloudflare-bypass #janitor-drop-zone:hover {
+    background: var(--black50a);
+    border-color: var(--SmartThemeQuoteColor);
+}
+
+.code-container {
+    position: relative;
+}
+
+.code-block {
+    max-height: 300px;
+    overflow-y: auto;
+}
