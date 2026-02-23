@@ -40,7 +40,7 @@ if (-not (Test-Path $extensionDir)) {
 }
 
 # Copy server plugin
-Write-Host "[1/3] Installing server plugin..." -ForegroundColor Yellow
+Write-Host "[1/4] Installing server plugin..." -ForegroundColor Yellow
 $sourcePlugin = Join-Path $PSScriptRoot "."
 $destPlugin = Join-Path $pluginDir "janitor-importer"
 
@@ -53,7 +53,7 @@ Copy-Item -Path $sourcePlugin -Destination $destPlugin -Recurse -Force -Exclude 
 Write-Host "  ✓ Server plugin installed" -ForegroundColor Green
 
 # Copy client extension
-Write-Host "[2/3] Installing client extension..." -ForegroundColor Yellow
+Write-Host "[2/4] Installing client extension..." -ForegroundColor Yellow
 $sourceExtension = Join-Path $PSScriptRoot "..\public\scripts\extensions\janitor-importer"
 $destExtension = Join-Path $extensionDir "janitor-importer"
 
@@ -74,7 +74,7 @@ if (Test-Path $sourceExtension) {
 }
 
 # Check config.yaml
-Write-Host "[3/3] Checking configuration..." -ForegroundColor Yellow
+Write-Host "[3/4] Checking configuration..." -ForegroundColor Yellow
 $configPath = Join-Path $SillyTavernPath "config.yaml"
 
 if (Test-Path $configPath) {
@@ -89,12 +89,35 @@ if (Test-Path $configPath) {
     Write-Host "  ⚠ config.yaml not found - will be created on first run" -ForegroundColor Yellow
 }
 
+# Apply native Cloudflare bypass patch
+Write-Host "[4/4] Applying native Cloudflare bypass patch to SillyTavern core..." -ForegroundColor Yellow
+$patchFile = Join-Path $destPlugin "janitor-native-bypass.patch"
+
+if (Test-Path $patchFile) {
+    # Change working directory to SillyTavern root to apply the patch correctly
+    Push-Location -Path $SillyTavernPath
+    
+    # Run git apply and capture the output
+    $gitOutput = git apply "plugins/janitor-importer/janitor-native-bypass.patch" 2>&1
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  ✓ Core code successfully patched!" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ Patch could not be applied automatically. It might already be applied or there is a conflict." -ForegroundColor Yellow
+        Write-Host "    Git output: $gitOutput" -ForegroundColor DarkGray
+    }
+    
+    # Return to original directory
+    Pop-Location
+} else {
+    Write-Host "  ⚠ Patch file not found: janitor-native-bypass.patch" -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host "Installation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "1. Make sure 'enableServerPlugins: true' is set in config.yaml" -ForegroundColor White
-Write-Host "2. (Optional) Apply the avatar patch: git apply plugins/janitor-importer/avatar-base64-support.patch" -ForegroundColor White
-Write-Host "3. Restart SillyTavern" -ForegroundColor White
-Write-Host "4. Try importing a JanitorAI character URL" -ForegroundColor White
+Write-Host "2. Restart SillyTavern" -ForegroundColor White
+Write-Host "3. Try importing a JanitorAI character URL" -ForegroundColor White
 Write-Host ""
