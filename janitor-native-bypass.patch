@@ -1,0 +1,1049 @@
+From 8410afdbff7dc24139a55524292077449de30072 Mon Sep 17 00:00:00 2001
+From: ZeOs360 <114468865+ZeOs360@users.noreply.github.com>
+Date: Sun, 22 Feb 2026 01:15:44 +0300
+Subject: [PATCH 1/3] feat: JanitorAI import with Cloudflare bypass via browser
+ bookmarklet
+
+- Replace broken api.jannyai.com download with HTML scraping approach
+- Detect Cloudflare 403 and return bookmarklet code for browser extraction
+- Add frontend modal with copy-to-clipboard and drag-drop import
+- Support base64 avatar embedding in JSON character imports
+- Add JanitorAI -> Pygmalion -> Chub fallback chain for bare UUIDs
+---
+ .../templates/janitorCloudflareBypass.html    | 191 ++++++++++
+ public/scripts/utils.js                       | 134 +++++++
+ src/endpoints/characters.js                   |  10 +-
+ src/endpoints/content-manager.js              | 334 ++++++++++++++++--
+ 4 files changed, 637 insertions(+), 32 deletions(-)
+ create mode 100644 public/scripts/templates/janitorCloudflareBypass.html
+
+diff --git a/public/scripts/templates/janitorCloudflareBypass.html b/public/scripts/templates/janitorCloudflareBypass.html
+new file mode 100644
+index 0000000000..483fe1cde1
+--- /dev/null
++++ b/public/scripts/templates/janitorCloudflareBypass.html
+@@ -0,0 +1,191 @@
++<div class="janitor-cloudflare-bypass">
++    <h3>
++        <i class="fa-solid fa-shield-halved"></i>
++        JanitorAI Import Blocked by Cloudflare
++    </h3>
++
++    <div class="alert alert-warning marginTopBot10">
++        <i class="fa-solid fa-triangle-exclamation"></i>
++        <strong>Why is this happening?</strong>
++        <p>JanitorAI uses Cloudflare Bot Fight Mode which blocks server-side requests.
++        Don't worry - you can still import this character using your browser!</p>
++    </div>
++
++    <div class="instruction-section">
++        <h4><i class="fa-solid fa-1"></i> Open the Character Page</h4>
++        <p>Click the button below to open the character page in a new tab:</p>
++        <a href="{{url}}" target="_blank" class="menu_button menu_button_icon margin10">
++            <i class="fa-solid fa-external-link-alt"></i>
++            Open Character Page
++        </a>
++    </div>
++
++    <div class="instruction-section">
++        <h4><i class="fa-solid fa-2"></i> Run the Extraction Code</h4>
++        <p>On the character page:</p>
++        <ol>
++            <li>Press <kbd>F12</kbd> to open browser console (Developer Tools)</li>
++            <li>Click the <strong>Console</strong> tab</li>
++            <li>Copy the code below and paste it into the console</li>
++            <li>Press <kbd>Enter</kbd> to run it</li>
++        </ol>
++
++        <div class="code-container margin10" style="position: relative;">
++            <button id="copy-bookmarklet-btn" class="menu_button menu_button_icon fa-solid fa-copy"
++                    title="Copy to clipboard" style="position: absolute; top: 5px; right: 5px; z-index: 10;">
++            </button>
++            <pre id="bookmarklet-code" class="code-block" style="white-space: pre-wrap; word-break: break-all; padding-right: 50px;">{{{bookmarklet}}}</pre>
++        </div>
++
++        <small class="text-muted">
++            <i class="fa-solid fa-circle-info"></i>
++            The code will automatically download a JSON file containing the character data.
++        </small>
++    </div>
++
++    <div class="instruction-section">
++        <h4><i class="fa-solid fa-3"></i> Import the Downloaded File</h4>
++        <p>After the JSON file downloads:</p>
++        <ol>
++            <li>Go to <strong>Character Management</strong> in SillyTavern</li>
++            <li>Click <strong>Import Character from File</strong></li>
++            <li>Select the downloaded <code>.json</code> file</li>
++        </ol>
++
++        <div class="margin10">
++            <p><strong>Or drag and drop the file here:</strong></p>
++            <div id="janitor-drop-zone" style="
++                border: 2px dashed var(--SmartThemeBorderColor);
++                border-radius: 10px;
++                padding: 30px;
++                text-align: center;
++                background: var(--black30a);
++                cursor: pointer;
++            ">
++                <i class="fa-solid fa-file-arrow-up fa-3x"></i>
++                <p>Drag & drop the downloaded JSON file here<br>or click to browse</p>
++            </div>
++            <input type="file" id="janitor-file-input" accept=".json" style="display: none;">
++        </div>
++    </div>
++
++    <details class="marginTopBot10">
++        <summary style="cursor: pointer; user-select: none;"><i class="fa-solid fa-circle-question"></i> Troubleshooting</summary>
++        <div class="margin10">
++            <p><strong>Code doesn't work?</strong></p>
++            <ul>
++                <li>Make sure you're on the correct character page</li>
++                <li>Try refreshing the page and running the code again</li>
++                <li>Check the console for error messages</li>
++            </ul>
++
++            <p><strong>Still having issues?</strong></p>
++            <ul>
++                <li>Press <kbd>Ctrl+U</kbd> to view page source</li>
++                <li>Press <kbd>Ctrl+F</kbd> and search for <code>window.mbxM.push</code></li>
++                <li>If you can't find it, JanitorAI may have changed their website structure</li>
++            </ul>
++        </div>
++    </details>
++</div>
++
++<style>
++.janitor-cloudflare-bypass h3 {
++    margin-top: 0;
++}
++
++.janitor-cloudflare-bypass h3 i {
++    color: var(--SmartThemeQuoteColor);
++    margin-right: 10px;
++}
++
++.janitor-cloudflare-bypass .alert {
++    padding: 15px;
++    border-radius: 8px;
++    background: #fff3cd;
++    color: #856404;
++    border: 1px solid #ffeaa7;
++}
++
++.chakra-ui-dark .janitor-cloudflare-bypass .alert,
++[data-theme=dark] .janitor-cloudflare-bypass .alert {
++    background: rgba(255, 193, 7, 0.2);
++    color: #ffc107;
++    border-color: rgba(255, 193, 7, 0.3);
++}
++
++.janitor-cloudflare-bypass .instruction-section {
++    margin: 20px 0;
++    padding: 15px;
++    background: var(--black10a);
++    border-radius: 8px;
++    border-left: 3px solid var(--SmartThemeQuoteColor);
++}
++
++.janitor-cloudflare-bypass .instruction-section h4 {
++    margin-top: 0;
++    color: var(--SmartThemeQuoteColor);
++}
++
++.janitor-cloudflare-bypass .instruction-section h4 i {
++    margin-right: 8px;
++}
++
++.janitor-cloudflare-bypass .code-container {
++    position: relative;
++    background: var(--black50a);
++    border: 1px solid var(--SmartThemeBorderColor);
++    border-radius: 5px;
++    padding: 10px;
++}
++
++.janitor-cloudflare-bypass .code-block {
++    max-height: 300px;
++    overflow-y: auto;
++    white-space: pre-wrap;
++    word-wrap: break-word;
++    font-family: 'Courier New', monospace;
++    font-size: 12px;
++    margin: 0;
++    padding: 5px;
++    background: transparent;
++}
++
++.janitor-cloudflare-bypass kbd {
++    background: var(--black50a);
++    border: 1px solid var(--SmartThemeBorderColor);
++    border-radius: 3px;
++    padding: 2px 6px;
++    font-family: monospace;
++    font-size: 0.9em;
++}
++
++.janitor-cloudflare-bypass code {
++    background: var(--black30a);
++    padding: 2px 6px;
++    border-radius: 3px;
++    font-family: monospace;
++}
++
++.janitor-cloudflare-bypass ol {
++    padding-left: 25px;
++}
++
++.janitor-cloudflare-bypass ol li {
++    margin: 8px 0;
++}
++
++.janitor-cloudflare-bypass #janitor-drop-zone:hover {
++    background: var(--black50a);
++    border-color: var(--SmartThemeQuoteColor);
++}
++
++.code-container {
++    position: relative;
++}
++
++.code-block {
++    max-height: 300px;
++    overflow-y: auto;
++}
++</style>
+diff --git a/public/scripts/utils.js b/public/scripts/utils.js
+index bedcbba275..b0a7f0d085 100644
+--- a/public/scripts/utils.js
++++ b/public/scripts/utils.js
+@@ -2866,6 +2866,23 @@ export async function importFromExternalUrl(url, { preserveFileName = null } = {
+     }
+ 
+     if (!request.ok) {
++        console.log('[Frontend] Error response - Status:', request.status);
++        console.log('[Frontend] Content-Type header:', request.headers.get('Content-Type'));
++
++        // Check if this is a Cloudflare block error
++        const contentType = request.headers.get('Content-Type');
++        if (contentType && contentType.includes('application/json')) {
++            try {
++                const errorData = await request.json();
++                if (errorData.error === 'cloudflare_block') {
++                    // Show special Cloudflare bypass modal
++                    await showCloudflareBypassModal(errorData);
++                    return;
++                }
++            } catch (e) {
++                // Not JSON, fall through to normal error handling
++            }
++        }
+         toastr.info(request.statusText, 'Custom content import failed');
+         console.error('Custom content import failed', request.status, request.statusText);
+         return;
+@@ -2896,6 +2913,123 @@ export async function importFromExternalUrl(url, { preserveFileName = null } = {
+     }
+ }
+ 
++/**
++ * Shows a modal with instructions to bypass Cloudflare protection for JanitorAI.
++ * @param {Object} errorData Error data from the server
++ * @param {string} errorData.uuid Character UUID
++ * @param {string} errorData.url Character page URL
++ * @param {string} errorData.bookmarklet Bookmarklet code
++ */
++async function showCloudflareBypassModal(errorData) {
++    try {
++        // Validate errorData
++        if (!errorData?.url || !errorData?.bookmarklet) {
++            console.error('Invalid errorData for Cloudflare bypass modal:', errorData);
++            toastr.error('Failed to show Cloudflare bypass instructions. Missing required data.');
++            return;
++        }
++
++        const { renderTemplateAsync } = await import('./templates.js');
++        const { callGenericPopup, POPUP_TYPE } = await import('./popup.js');
++        const { processDroppedFiles } = await import('../script.js');
++
++        const html = await renderTemplateAsync('janitorCloudflareBypass', errorData);
++
++        // Show the popup (don't await yet, we need to set up handlers first)
++        const popupPromise = callGenericPopup(html, POPUP_TYPE.TEXT, '', {
++            wide: true,
++            large: true,
++            allowVerticalScrolling: true,
++            okButton: 'Close',
++        });
++
++        // Wait for popup to be in DOM
++        await new Promise(resolve => setTimeout(resolve, 100));
++
++        // Set up copy button handler
++        const copyBtn = document.getElementById('copy-bookmarklet-btn');
++        const codeBlock = document.getElementById('bookmarklet-code');
++        if (copyBtn && codeBlock) {
++            copyBtn.addEventListener('click', () => {
++                const code = codeBlock.textContent;
++                if (code) {
++                    navigator.clipboard.writeText(code).then(() => {
++                        toastr.success('Code copied to clipboard!');
++                    }).catch(err => {
++                        console.error('Failed to copy:', err);
++                        toastr.error('Failed to copy code. Please select and copy manually.');
++                    });
++                }
++            });
++        }
++
++        // Set up drag & drop zone
++        const dropZone = document.getElementById('janitor-drop-zone');
++        const fileInput = document.getElementById('janitor-file-input');
++
++        if (dropZone && fileInput) {
++            dropZone.addEventListener('click', () => {
++                fileInput.click();
++            });
++
++            dropZone.addEventListener('dragover', (e) => {
++                e.preventDefault();
++                e.stopPropagation();
++                dropZone.style.borderColor = 'var(--SmartThemeQuoteColor)';
++                dropZone.style.background = 'var(--black50a)';
++            });
++
++            dropZone.addEventListener('dragleave', (e) => {
++                e.preventDefault();
++                e.stopPropagation();
++                dropZone.style.borderColor = 'var(--SmartThemeBorderColor)';
++                dropZone.style.background = 'var(--black30a)';
++            });
++
++            dropZone.addEventListener('drop', async (e) => {
++                e.preventDefault();
++                e.stopPropagation();
++                dropZone.style.borderColor = 'var(--SmartThemeBorderColor)';
++                dropZone.style.background = 'var(--black30a)';
++
++                const files = Array.from(e.dataTransfer?.files || []).filter(f => f.name.endsWith('.json'));
++                if (files.length > 0) {
++                    // Close the modal
++                    $('#dialogue_popup_cancel').trigger('click');
++                    // Import the files
++                    try {
++                        await processDroppedFiles(files);
++                    } catch (err) {
++                        console.error('Error processing dropped files:', err);
++                        toastr.error('Failed to import character file.');
++                    }
++                }
++            });
++
++            fileInput.addEventListener('change', async (e) => {
++                const files = Array.from(e.target?.files || []);
++                if (files.length > 0) {
++                    // Close the modal
++                    $('#dialogue_popup_cancel').trigger('click');
++                    // Import the files
++                    try {
++                        await processDroppedFiles(files);
++                    } catch (err) {
++                        console.error('Error processing selected files:', err);
++                        toastr.error('Failed to import character file.');
++                    }
++                }
++            });
++        }
++
++        // Now await the popup result
++        await popupPromise;
++    } catch (error) {
++        console.error('[Frontend] Error showing Cloudflare bypass modal:', error);
++        toastr.error('Failed to show modal. Check console for details.');
++    }
++}
++
+ /**
+  * If value is less than min, it's set to min.
+  * If value is greater than max, it's set to max.
+diff --git a/src/endpoints/characters.js b/src/endpoints/characters.js
+index b2f3c11d70..7db9b44707 100644
+--- a/src/endpoints/characters.js
++++ b/src/endpoints/characters.js
+@@ -889,8 +889,16 @@ async function importFromJson(uploadPath, { request }, preservedFileName) {
+         jsonData = readFromV2(jsonData);
+         jsonData.create_date = new Date().toISOString();
+         const pngName = preservedFileName || getPngName(jsonData.data?.name || jsonData.name, request.user.directories);
++
++        let avatarInput = DEFAULT_AVATAR_PATH;
++        if (jsonData.data?.extensions?.avatar_base64) {
++            const base64Data = jsonData.data.extensions.avatar_base64.split(',')[1] || jsonData.data.extensions.avatar_base64;
++            avatarInput = Buffer.from(base64Data, 'base64');
++            delete jsonData.data.extensions.avatar_base64;
++        }
++
+         const char = JSON.stringify(jsonData);
+-        const result = await writeCharacterData(DEFAULT_AVATAR_PATH, char, pngName, request);
++        const result = await writeCharacterData(avatarInput, char, pngName, request);
+         return result ? pngName : '';
+     } else if (jsonData.name !== undefined) {
+         console.info('Importing from v1 json');
+diff --git a/src/endpoints/content-manager.js b/src/endpoints/content-manager.js
+index 141cd3c6f1..f36a2934b6 100644
+--- a/src/endpoints/content-manager.js
++++ b/src/endpoints/content-manager.js
+@@ -521,37 +521,268 @@ function parseChubUrl(str) {
+     return null;
+ }
+ 
+-// Warning: Some characters might not exist in JannyAI.me
++/**
++ * Downloads a character from JanitorAI by scraping the character page HTML.
++ * @param {string} uuid Character UUID
++ * @returns {Promise<{buffer: Buffer, fileName: string, fileType: string}>}
++ */
+ async function downloadJannyCharacter(uuid) {
+-    // This endpoint is being guarded behind Bot Fight Mode of Cloudflare
+-    // So hosted ST on Azure/AWS/GCP/Collab might get blocked by IP
+-    // Should work normally on self-host PC/Android
+-    const result = await fetch('https://api.jannyai.com/api/v1/download', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({
+-            'characterId': uuid,
+-        }),
+-    });
++    try {
++        const pageUrl = `https://janitorai.com/characters/${uuid}`;
++        const response = await fetch(pageUrl, {
++            headers: {
++                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
++                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
++                'Accept-Language': 'en-US,en;q=0.9',
++                'Accept-Encoding': 'gzip, deflate, br',
++                'Cache-Control': 'no-cache',
++                'Pragma': 'no-cache',
++                'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
++                'Sec-Ch-Ua-Mobile': '?0',
++                'Sec-Ch-Ua-Platform': '"Windows"',
++                'Sec-Fetch-Dest': 'document',
++                'Sec-Fetch-Mode': 'navigate',
++                'Sec-Fetch-Site': 'none',
++                'Sec-Fetch-User': '?1',
++                'Upgrade-Insecure-Requests': '1',
++            },
++        });
+ 
+-    if (result.ok) {
+-        /** @type {any} */
+-        const downloadResult = await result.json();
+-        if (downloadResult.status === 'ok') {
+-            const imageResult = await fetch(downloadResult.downloadUrl);
+-            const buffer = Buffer.from(await imageResult.arrayBuffer());
+-            const fileName = `${sanitize(uuid)}.png`;
+-            const fileType = imageResult.headers.get('content-type');
++        if (!response.ok) {
++            if (response.status === 403) {
++                const bookmarkletCode = getJanitorBookmarkletCode();
++                const cfError = new Error('Cloudflare blocked request');
++                cfError.cloudflareBlock = true;
++                cfError.status = 403;
++                cfError.uuid = uuid;
++                cfError.url = pageUrl;
++                cfError.bookmarklet = bookmarkletCode;
++                throw cfError;
++            }
++            throw new Error(`Failed to fetch character page: ${response.statusText}`);
++        }
+ 
+-            return { buffer, fileName, fileType };
++        const html = await response.text();
++
++        const mbxMatch = html.match(/window\.mbxM\.push\(JSON\.parse\("((?:\\.|[^"\\])*?)"\)\)/s);
++        if (!mbxMatch) {
++            throw new Error('Character data not found in page HTML. JanitorAI may have changed their page structure.');
++        }
++
++        let mbxData;
++        try {
++            const unescapedJson = JSON.parse('"' + mbxMatch[1] + '"');
++            mbxData = JSON.parse(unescapedJson);
++        } catch (parseError) {
++            throw new Error('Failed to parse character JSON from HTML');
++        }
++
++        const janitorData = mbxData?.['Sk--a:a-a--characterStore']?.character;
++
++        if (!janitorData) {
++            throw new Error('Invalid character data structure');
++        }
++
++        const tavernCard = {
++            spec: 'chara_card_v2',
++            spec_version: '2.0',
++            data: {
++                name: janitorData.chat_name || janitorData.name || 'Unknown',
++                description: stripHtml(janitorData.description || ''),
++                personality: janitorData.personality || '',
++                scenario: janitorData.scenario || '',
++                first_mes: Array.isArray(janitorData.first_messages)
++                    ? janitorData.first_messages[0] || ''
++                    : janitorData.first_message || '',
++                mes_example: janitorData.example_dialogs || '',
++                creator_notes: '',
++                system_prompt: '',
++                post_history_instructions: '',
++                alternate_greetings: Array.isArray(janitorData.first_messages)
++                    ? janitorData.first_messages.slice(1)
++                    : [],
++                character_book: undefined,
++                tags: janitorData.tags?.map(t => t.name) || [],
++                creator: janitorData.creator_name || '',
++                character_version: '',
++                extensions: {
++                    janitor_uuid: janitorData.id,
++                    janitor_display_name: janitorData.name,
++                },
++            },
++        };
++
++        let finalBuffer;
++
++        if (!janitorData.avatar) {
++            const defaultAvatarPath = path.join(serverDirectory, DEFAULT_AVATAR_PATH);
++            finalBuffer = fs.readFileSync(defaultAvatarPath);
+         } else {
+-            console.error('Janny failed to download', downloadResult);
++            const avatarUrl = `https://ella.janitorai.com/bot-avatars/${janitorData.avatar}`;
++
++            try {
++                const avatarResponse = await fetch(avatarUrl, {
++                    headers: { 'User-Agent': USER_AGENT },
++                });
++
++                if (!avatarResponse.ok) {
++                    throw new Error(`Avatar fetch failed: ${avatarResponse.status}`);
++                }
++
++                const avatarBuffer = Buffer.from(await avatarResponse.arrayBuffer());
++                const contentType = avatarResponse.headers.get('content-type');
++
++                if (contentType && !contentType.includes('png')) {
++                    try {
++                        const image = await Jimp.read(avatarBuffer);
++                        finalBuffer = await image.getBuffer(JimpMime.png);
++                    } catch {
++                        finalBuffer = avatarBuffer;
++                    }
++                } else {
++                    finalBuffer = avatarBuffer;
++                }
++            } catch {
++                const defaultAvatarPath = path.join(serverDirectory, DEFAULT_AVATAR_PATH);
++                finalBuffer = fs.readFileSync(defaultAvatarPath);
++            }
++        }
++
++        const cardBuffer = write(finalBuffer, JSON.stringify(tavernCard));
++
++        return {
++            buffer: cardBuffer,
++            fileName: `${sanitize(janitorData.chat_name || janitorData.name || uuid)}.png`,
++            fileType: 'image/png',
++        };
++    } catch (error) {
++        if (!error.cloudflareBlock) {
++            console.error('Error downloading JanitorAI character:', error);
+         }
+-    } else {
+-        console.error('Janny returned error', result.statusText, await result.text());
++        throw error;
+     }
++}
+ 
+-    throw new Error('Failed to download character');
++/**
++ * Strips HTML tags from a string.
++ * @param {string} html HTML string
++ * @returns {string} Plain text
++ */
++function stripHtml(html) {
++    if (!html) return '';
++    return html
++        .replace(/<[^>]*>/g, '')
++        .replace(/&nbsp;/g, ' ')
++        .replace(/&amp;/g, '&')
++        .replace(/&lt;/g, '<')
++        .replace(/&gt;/g, '>')
++        .replace(/&quot;/g, '"')
++        .replace(/&#39;/g, '\'')
++        .replace(/&apos;/g, '\'')
++        .trim();
++}
++
++/**
++ * Returns the bookmarklet code for extracting JanitorAI characters via browser console.
++ * @returns {string} Bookmarklet code
++ */
++function getJanitorBookmarkletCode() {
++    return `(function() {
++    let charData = null;
++
++    fetch(window.location.href)
++        .then(r => r.text())
++        .then(html => {
++            const match = html.match(/window\\.mbxM\\.push\\(JSON\\.parse\\("((?:\\\\.|[^"\\\\])*?)"\\)\\)/);
++
++            if (!match) {
++                if (window.mbxM && window.mbxM.length > 0) {
++                    for (let i = 0; i < window.mbxM.length; i++) {
++                        if (window.mbxM[i]?.['Sk--a:a-a--characterStore']?.character) {
++                            charData = window.mbxM[i]['Sk--a:a-a--characterStore'].character;
++                            downloadCharacter(charData);
++                            return;
++                        }
++                    }
++                }
++                alert('Failed to extract character data.');
++                return;
++            }
++
++            try {
++                const unescaped = JSON.parse('"' + match[1] + '"');
++                const parsedData = JSON.parse(unescaped);
++                charData = parsedData['Sk--a:a-a--characterStore']?.character;
++                if (!charData) throw new Error('Character not in expected location');
++                downloadCharacter(charData);
++            } catch(e) {
++                alert('Failed to parse character data: ' + e.message);
++            }
++        })
++        .catch(err => {
++            alert('Failed to fetch page HTML: ' + err.message);
++        });
++
++    function downloadCharacter(charData) {
++        const avatarUrl = charData.avatar ? 'https://ella.janitorai.com/bot-avatars/' + charData.avatar : null;
++
++        const processCharacter = async () => {
++            let avatarBase64 = null;
++
++            if (avatarUrl) {
++                try {
++                    const avatarResponse = await fetch(avatarUrl);
++                    if (avatarResponse.ok) {
++                        const blob = await avatarResponse.blob();
++                        const reader = new FileReader();
++                        avatarBase64 = await new Promise((resolve) => {
++                            reader.onloadend = () => resolve(reader.result);
++                            reader.readAsDataURL(blob);
++                        });
++                    }
++                } catch (err) {}
++            }
++
++            const tavernCard = {
++                spec: 'chara_card_v2',
++                spec_version: '2.0',
++                data: {
++                    name: charData.chat_name || charData.name || 'Unknown',
++                    description: (charData.description || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim(),
++                    personality: charData.personality || '',
++                    scenario: charData.scenario || '',
++                    first_mes: Array.isArray(charData.first_messages) ? (charData.first_messages[0] || '') : (charData.first_message || ''),
++                    mes_example: charData.example_dialogs || '',
++                    creator_notes: '',
++                    system_prompt: '',
++                    post_history_instructions: '',
++                    alternate_greetings: Array.isArray(charData.first_messages) ? charData.first_messages.slice(1) : [],
++                    character_book: undefined,
++                    tags: charData.tags?.map(t => t.name) || [],
++                    creator: charData.creator_name || '',
++                    character_version: '',
++                    extensions: {
++                        janitor_uuid: charData.id,
++                        janitor_display_name: charData.name,
++                        avatar_url: avatarUrl,
++                        avatar_base64: avatarBase64
++                    }
++                }
++            };
++
++            const blob = new Blob([JSON.stringify(tavernCard, null, 2)], {type: 'application/json'});
++            const url = URL.createObjectURL(blob);
++            const a = document.createElement('a');
++            a.href = url;
++            a.download = (charData.chat_name || charData.name || 'character').replace(/[^a-z0-9]/gi, '_') + '.json';
++            a.click();
++            URL.revokeObjectURL(url);
++            alert('Character downloaded: ' + (charData.chat_name || charData.name) + '.json' + (avatarBase64 ? ' (with avatar)' : ' (without avatar)'));
++        };
++
++        processCharacter();
++    }
++})();`.trim();
+ }
+ 
+ //Download Character Cards from AICharactersCards.com (AICC) API.
+@@ -980,6 +1211,17 @@ router.post('/importURL', async (request, response) => {
+         response.set('X-Custom-Content-Type', type);
+         return response.send(result.buffer);
+     } catch (error) {
++        if (error.cloudflareBlock) {
++            if (!error.uuid || !error.url || !error.bookmarklet) {
++                return response.status(500).json({ error: 'Internal error preparing Cloudflare bypass' });
++            }
++            return response.status(error.status).json({
++                error: 'cloudflare_block',
++                uuid: error.uuid,
++                url: error.url,
++                bookmarklet: error.bookmarklet,
++            });
++        }
+         console.error('Importing custom content failed', error);
+         return response.sendStatus(500);
+     }
+@@ -995,17 +1237,18 @@ router.post('/importUUID', async (request, response) => {
+         let result;
+ 
+         const isJannny = uuid.includes('_character');
+-        const isPygmalion = (!isJannny && uuid.length == 36);
+         const isAICC = uuid.startsWith('AICC/');
+         const isPerchance = isPerchanceUUID(uuid);
++        const isUuidFormat = uuid.length === 36 && uuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+         const uuidType = uuid.includes('lorebook') ? 'lorebook' : 'character';
+ 
+-        if (isPygmalion) {
+-            console.info('Downloading Pygmalion character:', uuid);
+-            result = await downloadPygmalionCharacter(uuid);
+-        } else if (isJannny) {
+-            console.info('Downloading Janitor character:', uuid.split('_')[0]);
+-            result = await downloadJannyCharacter(uuid.split('_')[0]);
++        if (isJannny) {
++            const jannyUuid = uuid.split('_')[0];
++            if (!jannyUuid) {
++                return response.status(400).json({ error: 'Invalid JanitorAI UUID format' });
++            }
++            console.info('Downloading Janitor character:', jannyUuid);
++            result = await downloadJannyCharacter(jannyUuid);
+         } else if (isAICC) {
+             const [, author, card] = uuid.split('/');
+             console.info('Downloading AICC character:', `${author}/${card}`);
+@@ -1014,6 +1257,24 @@ router.post('/importUUID', async (request, response) => {
+             console.info('Downloading Perchance character:', uuid);
+             const parsedUuid = parsePerchanceSlug(uuid);
+             result = await downloadPerchanceCharacter(parsedUuid);
++        } else if (isUuidFormat) {
++            console.info('Attempting to download character with UUID:', uuid);
++            try {
++                result = await downloadJannyCharacter(uuid);
++            } catch (janitorError) {
++                if (janitorError.cloudflareBlock) {
++                    throw janitorError;
++                }
++                try {
++                    result = await downloadPygmalionCharacter(uuid);
++                } catch {
++                    if (uuidType === 'character') {
++                        result = await downloadChubCharacter(uuid);
++                    } else if (uuidType === 'lorebook') {
++                        result = await downloadChubLorebook(uuid);
++                    }
++                }
++            }
+         } else {
+             if (uuidType === 'character') {
+                 console.info('Downloading chub character:', uuid);
+@@ -1035,6 +1296,17 @@ router.post('/importUUID', async (request, response) => {
+         response.set('X-Custom-Content-Type', uuidType);
+         return response.send(result.buffer);
+     } catch (error) {
++        if (error.cloudflareBlock) {
++            if (!error.uuid || !error.url || !error.bookmarklet) {
++                return response.status(500).json({ error: 'Internal error preparing Cloudflare bypass' });
++            }
++            return response.status(error.status).json({
++                error: 'cloudflare_block',
++                uuid: error.uuid,
++                url: error.url,
++                bookmarklet: error.bookmarklet,
++            });
++        }
+         console.error('Importing custom content failed', error);
+         return response.sendStatus(500);
+     }
+
+From 7380c525148dcd49974e1d32d7aa2b5011ebe34a Mon Sep 17 00:00:00 2001
+From: ZeOs360 <114468865+ZeOs360@users.noreply.github.com>
+Date: Sun, 22 Feb 2026 02:36:23 +0300
+Subject: [PATCH 2/3] fix: prevent Cloudflare 403 from breaking Pygmalion/Chub
+ fallback chain
+
+---
+ src/endpoints/content-manager.js | 30 ++++++++++++++++++++++--------
+ 1 file changed, 22 insertions(+), 8 deletions(-)
+
+diff --git a/src/endpoints/content-manager.js b/src/endpoints/content-manager.js
+index f36a2934b6..8e607498b7 100644
+--- a/src/endpoints/content-manager.js
++++ b/src/endpoints/content-manager.js
+@@ -1259,19 +1259,33 @@ router.post('/importUUID', async (request, response) => {
+             result = await downloadPerchanceCharacter(parsedUuid);
+         } else if (isUuidFormat) {
+             console.info('Attempting to download character with UUID:', uuid);
++            let savedCloudflareError = null;
+             try {
+                 result = await downloadJannyCharacter(uuid);
+             } catch (janitorError) {
+                 if (janitorError.cloudflareBlock) {
+-                    throw janitorError;
++                    // Cloudflare blocked the request — save the error but don't throw yet.
++                    // The UUID might belong to Pygmalion or Chub, so try those first.
++                    savedCloudflareError = janitorError;
++                    console.info('JanitorAI Cloudflare block detected, trying other sources before showing bypass modal...');
+                 }
+-                try {
+-                    result = await downloadPygmalionCharacter(uuid);
+-                } catch {
+-                    if (uuidType === 'character') {
+-                        result = await downloadChubCharacter(uuid);
+-                    } else if (uuidType === 'lorebook') {
+-                        result = await downloadChubLorebook(uuid);
++                if (!result) {
++                    try {
++                        result = await downloadPygmalionCharacter(uuid);
++                    } catch {
++                        try {
++                            if (uuidType === 'character') {
++                                result = await downloadChubCharacter(uuid);
++                            } else if (uuidType === 'lorebook') {
++                                result = await downloadChubLorebook(uuid);
++                            }
++                        } catch {
++                            // All fallbacks failed — if we have a saved CF error, throw it now
++                            // so the user gets the Janitor bookmarklet modal as a last resort.
++                            if (savedCloudflareError) {
++                                throw savedCloudflareError;
++                            }
++                        }
+                     }
+                 }
+             }
+
+From 3c3198ce0c9a142fb6698a9c97d400bd93ac2b86 Mon Sep 17 00:00:00 2001
+From: ZeOs360 <114468865+ZeOs360@users.noreply.github.com>
+Date: Sun, 22 Feb 2026 03:52:02 +0300
+Subject: [PATCH 3/3] Use Janny API for Janitor import and keep CF fallback
+
+---
+ src/endpoints/content-manager.js | 191 ++++++-------------------------
+ 1 file changed, 38 insertions(+), 153 deletions(-)
+
+diff --git a/src/endpoints/content-manager.js b/src/endpoints/content-manager.js
+index 8e607498b7..f3be833f98 100644
+--- a/src/endpoints/content-manager.js
++++ b/src/endpoints/content-manager.js
+@@ -521,165 +521,50 @@ function parseChubUrl(str) {
+     return null;
+ }
+ 
+-/**
+- * Downloads a character from JanitorAI by scraping the character page HTML.
+- * @param {string} uuid Character UUID
+- * @returns {Promise<{buffer: Buffer, fileName: string, fileType: string}>}
+- */
++// Warning: Some characters might not exist in JannyAI.me
++// The API endpoint is guarded behind Cloudflare Bot Fight Mode.
++// Hosted ST on Azure/AWS/GCP/Colab might get blocked by IP.
++// Should work normally on self-host PC/Android.
++// If Cloudflare blocks, we throw a cloudflareBlock error so the caller
++// can show the bookmarklet modal as a last resort.
+ async function downloadJannyCharacter(uuid) {
+-    try {
+-        const pageUrl = `https://janitorai.com/characters/${uuid}`;
+-        const response = await fetch(pageUrl, {
+-            headers: {
+-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+-                'Accept-Language': 'en-US,en;q=0.9',
+-                'Accept-Encoding': 'gzip, deflate, br',
+-                'Cache-Control': 'no-cache',
+-                'Pragma': 'no-cache',
+-                'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+-                'Sec-Ch-Ua-Mobile': '?0',
+-                'Sec-Ch-Ua-Platform': '"Windows"',
+-                'Sec-Fetch-Dest': 'document',
+-                'Sec-Fetch-Mode': 'navigate',
+-                'Sec-Fetch-Site': 'none',
+-                'Sec-Fetch-User': '?1',
+-                'Upgrade-Insecure-Requests': '1',
+-            },
+-        });
+-
+-        if (!response.ok) {
+-            if (response.status === 403) {
+-                const bookmarkletCode = getJanitorBookmarkletCode();
+-                const cfError = new Error('Cloudflare blocked request');
+-                cfError.cloudflareBlock = true;
+-                cfError.status = 403;
+-                cfError.uuid = uuid;
+-                cfError.url = pageUrl;
+-                cfError.bookmarklet = bookmarkletCode;
+-                throw cfError;
+-            }
+-            throw new Error(`Failed to fetch character page: ${response.statusText}`);
+-        }
+-
+-        const html = await response.text();
+-
+-        const mbxMatch = html.match(/window\.mbxM\.push\(JSON\.parse\("((?:\\.|[^"\\])*?)"\)\)/s);
+-        if (!mbxMatch) {
+-            throw new Error('Character data not found in page HTML. JanitorAI may have changed their page structure.');
+-        }
+-
+-        let mbxData;
+-        try {
+-            const unescapedJson = JSON.parse('"' + mbxMatch[1] + '"');
+-            mbxData = JSON.parse(unescapedJson);
+-        } catch (parseError) {
+-            throw new Error('Failed to parse character JSON from HTML');
+-        }
+-
+-        const janitorData = mbxData?.['Sk--a:a-a--characterStore']?.character;
+-
+-        if (!janitorData) {
+-            throw new Error('Invalid character data structure');
+-        }
+-
+-        const tavernCard = {
+-            spec: 'chara_card_v2',
+-            spec_version: '2.0',
+-            data: {
+-                name: janitorData.chat_name || janitorData.name || 'Unknown',
+-                description: stripHtml(janitorData.description || ''),
+-                personality: janitorData.personality || '',
+-                scenario: janitorData.scenario || '',
+-                first_mes: Array.isArray(janitorData.first_messages)
+-                    ? janitorData.first_messages[0] || ''
+-                    : janitorData.first_message || '',
+-                mes_example: janitorData.example_dialogs || '',
+-                creator_notes: '',
+-                system_prompt: '',
+-                post_history_instructions: '',
+-                alternate_greetings: Array.isArray(janitorData.first_messages)
+-                    ? janitorData.first_messages.slice(1)
+-                    : [],
+-                character_book: undefined,
+-                tags: janitorData.tags?.map(t => t.name) || [],
+-                creator: janitorData.creator_name || '',
+-                character_version: '',
+-                extensions: {
+-                    janitor_uuid: janitorData.id,
+-                    janitor_display_name: janitorData.name,
+-                },
+-            },
+-        };
+-
+-        let finalBuffer;
++    const result = await fetch('https://api.jannyai.com/api/v1/download', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++            'characterId': uuid,
++        }),
++    });
+ 
+-        if (!janitorData.avatar) {
+-            const defaultAvatarPath = path.join(serverDirectory, DEFAULT_AVATAR_PATH);
+-            finalBuffer = fs.readFileSync(defaultAvatarPath);
++    if (result.ok) {
++        /** @type {any} */
++        const downloadResult = await result.json();
++        if (downloadResult.status === 'ok') {
++            const imageResult = await fetch(downloadResult.downloadUrl);
++            const buffer = Buffer.from(await imageResult.arrayBuffer());
++            const fileName = `${sanitize(uuid)}.png`;
++            const fileType = imageResult.headers.get('content-type');
++            return { buffer, fileName, fileType };
+         } else {
+-            const avatarUrl = `https://ella.janitorai.com/bot-avatars/${janitorData.avatar}`;
+-
+-            try {
+-                const avatarResponse = await fetch(avatarUrl, {
+-                    headers: { 'User-Agent': USER_AGENT },
+-                });
+-
+-                if (!avatarResponse.ok) {
+-                    throw new Error(`Avatar fetch failed: ${avatarResponse.status}`);
+-                }
+-
+-                const avatarBuffer = Buffer.from(await avatarResponse.arrayBuffer());
+-                const contentType = avatarResponse.headers.get('content-type');
+-
+-                if (contentType && !contentType.includes('png')) {
+-                    try {
+-                        const image = await Jimp.read(avatarBuffer);
+-                        finalBuffer = await image.getBuffer(JimpMime.png);
+-                    } catch {
+-                        finalBuffer = avatarBuffer;
+-                    }
+-                } else {
+-                    finalBuffer = avatarBuffer;
+-                }
+-            } catch {
+-                const defaultAvatarPath = path.join(serverDirectory, DEFAULT_AVATAR_PATH);
+-                finalBuffer = fs.readFileSync(defaultAvatarPath);
+-            }
++            console.error('Janny API failed to download', downloadResult);
+         }
+-
+-        const cardBuffer = write(finalBuffer, JSON.stringify(tavernCard));
+-
+-        return {
+-            buffer: cardBuffer,
+-            fileName: `${sanitize(janitorData.chat_name || janitorData.name || uuid)}.png`,
+-            fileType: 'image/png',
+-        };
+-    } catch (error) {
+-        if (!error.cloudflareBlock) {
+-            console.error('Error downloading JanitorAI character:', error);
+-        }
+-        throw error;
++    } else if (result.status === 403) {
++        // Cloudflare Bot Fight Mode blocked the API request
++        console.warn('JanitorAI API returned 403 — Cloudflare block detected for UUID:', uuid);
++        const bookmarkletCode = getJanitorBookmarkletCode();
++        const pageUrl = `https://janitorai.com/characters/${uuid}`;
++        const cfError = new Error('Cloudflare blocked JanitorAI API request');
++        cfError.cloudflareBlock = true;
++        cfError.status = 403;
++        cfError.uuid = uuid;
++        cfError.url = pageUrl;
++        cfError.bookmarklet = bookmarkletCode;
++        throw cfError;
++    } else {
++        console.error('Janny API returned error', result.statusText, await result.text());
+     }
+-}
+ 
+-/**
+- * Strips HTML tags from a string.
+- * @param {string} html HTML string
+- * @returns {string} Plain text
+- */
+-function stripHtml(html) {
+-    if (!html) return '';
+-    return html
+-        .replace(/<[^>]*>/g, '')
+-        .replace(/&nbsp;/g, ' ')
+-        .replace(/&amp;/g, '&')
+-        .replace(/&lt;/g, '<')
+-        .replace(/&gt;/g, '>')
+-        .replace(/&quot;/g, '"')
+-        .replace(/&#39;/g, '\'')
+-        .replace(/&apos;/g, '\'')
+-        .trim();
++    throw new Error('Failed to download character');
+ }
+ 
+ /**
