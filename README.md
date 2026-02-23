@@ -3,173 +3,142 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ZeOs360/SillyTavern-JanitorImporter/releases)
 
-A SillyTavern plugin that enables importing characters from JanitorAI with automatic Cloudflare bypass support.
+A powerful SillyTavern plugin that enables importing characters directly from JanitorAI.  
+It includes a native core patch to seamlessly bypass JanitorAI's **Cloudflare Bot Fight Mode**.
+
+---
 
 ## 🌟 Features
 
-- **Direct API Import**: Automatically attempts to import characters from JanitorAI's API
-- **Cloudflare Bypass**: When API is blocked, provides a user-friendly browser-based workaround
-- **Automatic Avatar Import**: Downloads and embeds character avatars automatically
-- **Drag & Drop Support**: Easy import of downloaded character JSON files
-- **Seamless Integration**: Works naturally with SillyTavern's character import system
+- **Direct API Import**: Automatically imports characters from JanitorAI's API.
+- **Native Cloudflare Bypass**: Integrates directly into SillyTavern’s core.  
+  When blocked (403/502), it provides a user-friendly browser-based workaround.
+- **Automatic Avatar Import**: Downloads and embeds character avatars automatically.
+- **1-Click Bookmarklet**: Push character data securely back to SillyTavern via browser console.
+- **Automated Installation**: Scripts handle copying files and patching the core automatically.
+
+---
 
 ## 📋 Why This Plugin Exists
 
-The SillyTavern core maintainers don't want to maintain Cloudflare bypass/reverse engineering methods in the main application. This plugin provides that functionality as a standalone, optional extension that users can choose to install.
+SillyTavern maintainers generally avoid maintaining Cloudflare bypasses in the main app.  
+This plugin provides that functionality as a **standalone extension**, safely patching the core importer so you never lose access to JanitorAI characters.
+
+---
 
 ## 🚀 Quick Installation
 
-### Automated Installation (Recommended)
+### 🪟 Windows (PowerShell)
 
-**Windows (PowerShell):**
+1. Download and extract this repository (or clone it).
+2. Open PowerShell (Administrator if SillyTavern is in a protected folder).
+3. Run the installer:
+
 ```powershell
-# Download and extract this repository first, then:
 cd path\to\SillyTavern-JanitorImporter
-.\server-plugin\install.ps1 "C:\path\to\your\SillyTavern"
+.\install.ps1 "C:\path\to\your\SillyTavern"
 ```
 
-**Linux/Mac:**
+### ⚠️ If you get an Execution Policy error, run:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+## 🐧 Linux & Mac
 ```bash
-# Download and extract this repository first, then:
 cd path/to/SillyTavern-JanitorImporter
-chmod +x server-plugin/install.sh
-./server-plugin/install.sh /path/to/your/SillyTavern
+chmod +x install.sh
+./install.sh /path/to/your/SillyTavern
 ```
 
-### Manual Installation
-
-See [INSTALL.md](server-plugin/INSTALL.md) for detailed manual installation instructions.
-
-## 📖 Usage
-
-1. **Enable Server Plugins** in your SillyTavern `config.yaml`:
-   ```yaml
-   enableServerPlugins: true
-   ```
-
-2. **Restart SillyTavern**
-
-3. **Import a JanitorAI Character**:
-   - Go to Character Management
-   - Click "Import from URL"
-   - Paste a JanitorAI character URL: `https://janitorai.com/characters/[uuid]`
-
-4. **If Cloudflare Blocks the Import**:
-   - A modal will appear with step-by-step instructions
-   - Run the provided code in your browser console
-   - Import the downloaded JSON file
+## ⚙️ Post-Installation Steps
+1. Enable server plugins in config.yaml:
+```yaml
+enableServerPlugins: true
+```
+2. Restart SillyTavern completely (close terminal and relaunch).
+3. In SillyTavern UI, click Import Character (URL) and paste:
+```
+https://janitorai.com/characters/[uuid]
+```
 
 ## 🎯 How It Works
 
 ### Direct Import Flow
-
 ```
-User pastes URL → Plugin tries API → Success → Character imported! 🎉
+User pastes URL → Core tries API → Success → Character imported! 🎉
 ```
 
-### Cloudflare Bypass Flow
-
+### Cloudflare Bypass Flow (Native Patch)
 ```
-User pastes URL → Plugin tries API → 403 (Cloudflare blocks)
-    → Plugin shows modal with instructions
+User pastes URL → Core tries API → 403/502 (blocked)
+    → Native patch intercepts failure
+    → UI shows modal with instructions
     → User opens character page in browser
     → User runs bookmarklet in console
     → Character data downloads as JSON (with avatar)
-    → User imports JSON file
+    → User drops JSON into SillyTavern
     → Character imported! 🎉
 ```
-
-The bookmarklet extracts character data directly from the webpage's JavaScript, bypassing Cloudflare's bot protection.
 
 ## 📁 Repository Structure
 
 ```
 SillyTavern-JanitorImporter/
-├── server-plugin/          # Backend plugin (goes in SillyTavern/plugins/)
-│   ├── index.js           # Main plugin logic and API endpoints
-│   ├── package.json       # NPM package metadata
-│   ├── install.ps1        # Windows installer
-│   ├── install.sh         # Linux/Mac installer
-│   ├── README.md          # Detailed documentation
-│   ├── INSTALL.md         # Installation guide
-│   ├── CHANGELOG.md       # Version history
-│   └── avatar-base64-support.patch  # Optional core patch
+├── install.ps1                    # Windows automated installer
+├── install.sh                     # Linux/Mac automated installer
+├── janitor-native-bypass.patch    # Core Git patch for SillyTavern
+├── push-to-github.ps1             # Helper script for publishing
+├── README.md                      # Project documentation
 │
-├── client-extension/      # Frontend extension (goes in SillyTavern/public/scripts/extensions/)
-│   ├── index.js           # Frontend logic and UI
-│   ├── manifest.json      # Extension metadata
-│   ├── style.css          # Modal styling
-│   └── janitorCloudflareBypass.html  # Bypass instructions template
+├── server-plugin/                 # Backend plugin (goes in plugins/janitor-importer/)
+│   ├── index.js                   # Main plugin logic & API endpoints
+│   ├── package.json               # NPM package metadata
+│   ├── CHANGELOG.md               # Version history
+│   ├── LICENSE                    # License file
+│   ├── install.ps1                # Windows installer (plugin only)
+│   ├── install.sh                 # Linux/Mac installer (plugin only)
+│   └── .gitignore                 # Git ignore rules
 │
-└── README.md              # This file
+└── client-extension/              # Frontend extension (goes in public/scripts/extensions/)
+├── index.js                   # Frontend logic and UI triggers
+├── manifest.json              # Extension metadata
+├── style.css                  # Custom styling for bypass modal
+└── janitorCloudflareBypass.html # Modal UI template
 ```
-
-## 🔧 Technical Details
-
-### Server Plugin
-
-- **Language**: JavaScript (ES Module)
-- **Framework**: Express.js
-- **API Endpoints**:
-  - `POST /api/plugins/janitor-importer/import` - Import character by UUID
-  - `GET /api/plugins/janitor-importer/bookmarklet` - Get bookmarklet code
-
-### Client Extension
-
-- **Language**: JavaScript (ES Module)
-- **Dependencies**: SillyTavern extensions API
-- **Features**: URL interception, modal display, drag-drop support
-
-## 🛠️ Development
-
-### Testing Locally
-
-```bash
-# In your SillyTavern directory
-node server.js
-
-# Check console for:
-# [JanitorImporter] Plugin initialized with API routes
-# [JanitorImporter] Extension initialized
-```
-
-### Updating the Bookmarklet
-
-If JanitorAI changes their website structure, update the bookmarklet in [`server-plugin/index.js`](server-plugin/index.js) in the `getJanitorBookmarkletCode()` function.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Areas for Contribution
-
-- Bug fixes for website structure changes
-- UI/UX improvements for the bypass modal
-- Additional import sources
-- Documentation improvements
-- Translations
-
-## 📝 Changelog
-
-See [CHANGELOG.md](server-plugin/CHANGELOG.md) for version history.
 
 ## 🐛 Troubleshooting
 
-### Plugin Not Loading
-- Ensure `enableServerPlugins: true` in `config.yaml`
-- Check server console for error messages
-- Verify files are in correct directories
+Patch could not be applied automatically  
+→ Your SillyTavern core files may be modified or outdated.
+Run:
+```bash
+git restore .
+```
+(⚠️ Warning: resets local changes) and reinstall.
 
-### Import Fails with 403
-- This is expected when Cloudflare blocks the request
-- Follow the bypass instructions in the modal
-- Make sure you're on the character page, not the chat page
+Plugin Not Loading  
+→ Ensure enableServerPlugins: true in config.yaml.
+Restart the server console (not just browser refresh).
 
-### Bookmarklet Doesn't Work
-- Ensure you're on `https://janitorai.com/characters/[uuid]`
-- Try refreshing the page and running again
-- Check browser console for error messages
-- JanitorAI may have updated their website - please open an issue
+Bookmarklet Doesn’t Work  
+→ Make sure you are on:
+```
+https://janitorai.com/characters/[uuid]
+```
+→ Check browser console (F12) for errors.
+→ JanitorAI may have updated their DOM structure.
+
+## 🤝 Contributing
+Bug fixes for DOM/website changes
+
+UI/UX improvements for bypass modal
+
+Additional import sources
+
+Documentation & translations
+
+Pull Requests are welcome!
 
 ## 📄 License
 

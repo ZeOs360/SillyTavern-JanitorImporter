@@ -49,18 +49,18 @@ if (Test-Path $destPlugin) {
     Remove-Item -Path $destPlugin -Recurse -Force
 }
 
-Copy-Item -Path $sourcePlugin -Destination $destPlugin -Recurse -Force -Exclude @("*.ps1", "*.sh", "INSTALL.md", ".git*")
+Copy-Item -Path $sourcePlugin -Destination $destPlugin -Recurse -Force -Exclude @("*.ps1", "*.sh", "INSTALL.md", ".git*", "janitor-native-bypass.patch")
 Write-Host "  ✓ Server plugin installed" -ForegroundColor Green
 
 # Copy client extension
 Write-Host "[2/4] Installing client extension..." -ForegroundColor Yellow
-$sourceExtension = Join-Path $PSScriptRoot "..\public\scripts\extensions\janitor-importer"
-$destExtension = Join-Path $extensionDir "janitor-importer"
-
+# Try to find 'client-extension' folder in root or current dir
+$sourceExtension = Join-Path $PSScriptRoot "..\client-extension"
 if (-not (Test-Path $sourceExtension)) {
-    # Try alternative path structure
-    $sourceExtension = Join-Path $PSScriptRoot "public\scripts\extensions\janitor-importer"
+    $sourceExtension = Join-Path $PSScriptRoot "client-extension"
 }
+
+$destExtension = Join-Path $extensionDir "janitor-importer"
 
 if (Test-Path $sourceExtension) {
     if (Test-Path $destExtension) {
@@ -91,14 +91,22 @@ if (Test-Path $configPath) {
 
 # Apply native Cloudflare bypass patch
 Write-Host "[4/4] Applying native Cloudflare bypass patch to SillyTavern core..." -ForegroundColor Yellow
-$patchFile = Join-Path $destPlugin "janitor-native-bypass.patch"
 
-if (Test-Path $patchFile) {
-    # Change working directory to SillyTavern root to apply the patch correctly
+# Try to find the patch file in root or current dir
+$sourcePatch = Join-Path $PSScriptRoot "..\janitor-native-bypass.patch"
+if (-not (Test-Path $sourcePatch)) {
+    $sourcePatch = Join-Path $PSScriptRoot "janitor-native-bypass.patch"
+}
+
+if (Test-Path $sourcePatch) {
+    # Copy patch temporarily to SillyTavern root to ensure Git applies it with correct paths
+    $tempPatch = Join-Path $SillyTavernPath "janitor-native-bypass.patch"
+    Copy-Item -Path $sourcePatch -Destination $tempPatch -Force
+    
     Push-Location -Path $SillyTavernPath
     
     # Run git apply and capture the output
-    $gitOutput = git apply "plugins/janitor-importer/janitor-native-bypass.patch" 2>&1
+    $gitOutput = git apply "janitor-native-bypass.patch" 2>&1
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✓ Core code successfully patched!" -ForegroundColor Green
@@ -107,10 +115,11 @@ if (Test-Path $patchFile) {
         Write-Host "    Git output: $gitOutput" -ForegroundColor DarkGray
     }
     
-    # Return to original directory
+    # Clean up the temporary patch file and return
+    Remove-Item "janitor-native-bypass.patch" -ErrorAction SilentlyContinue
     Pop-Location
 } else {
-    Write-Host "  ⚠ Patch file not found: janitor-native-bypass.patch" -ForegroundColor Yellow
+    Write-Host "  ⚠ Patch file not found! Please ensure 'janitor-native-bypass.patch' is in the repository root." -ForegroundColor Yellow
 }
 
 Write-Host ""
