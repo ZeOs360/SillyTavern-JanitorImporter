@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ZeOs360/SillyTavern-JanitorImporter/releases)
 
+## Tested On SillyTavern 1.16.0
 A powerful SillyTavern plugin that enables importing characters directly from JanitorAI.  
 It includes a native core patch to seamlessly bypass JanitorAI's **Cloudflare Bot Fight Mode**.
 
