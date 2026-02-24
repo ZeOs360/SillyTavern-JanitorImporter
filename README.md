@@ -28,6 +28,8 @@ This plugin provides that functionality as a **standalone extension**, safely pa
 
 ## 🚀 Quick Installation
 
+⚠️ **IMPORTANT**: This installation applies a native patch directly to the SillyTavern codebase. Version mismatches can cause application errors. Always back up your data/ directory before installing. (Note: If your app breaks, you can revert the core changes using git restore .)
+
 ### 🪟 Windows (PowerShell)
 
 1. Download and extract this repository (or clone it).
@@ -76,7 +78,7 @@ User pastes URL → Core tries API → 403/502 (blocked)
     → UI shows modal with instructions
     → User opens character page in browser
     → User runs bookmarklet in console
-    → Character data downloads as JSON (with avatar)
+    → Character data downloads as JSON
     → User drops JSON into SillyTavern
     → Character imported! 🎉
 ```
