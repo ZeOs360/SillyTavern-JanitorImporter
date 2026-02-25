@@ -87,27 +87,19 @@ User pastes URL → Core tries API → 403/502 (blocked)
 ## 📁 Repository Structure
 
 ```
-SillyTavern-JanitorImporter/
-├── install.ps1                    # Windows automated installer
-├── install.sh                     # Linux/Mac automated installer
-├── janitor-native-bypass.patch    # Core Git patch for SillyTavern
-├── push-to-github.ps1             # Helper script for publishing
-├── README.md                      # Project documentation
-│
-├── server-plugin/                 # Backend plugin (goes in plugins/janitor-importer/)
-│   ├── index.js                   # Main plugin logic & API endpoints
-│   ├── package.json               # NPM package metadata
-│   ├── CHANGELOG.md               # Version history
-│   ├── LICENSE                    # License file
-│   ├── install.ps1                # Windows installer (plugin only)
-│   ├── install.sh                 # Linux/Mac installer (plugin only)
-│   └── .gitignore                 # Git ignore rules
-│
-└── client-extension/              # Frontend extension (goes in public/scripts/extensions/)
-├── index.js                   # Frontend logic and UI triggers
-├── manifest.json              # Extension metadata
-├── style.css                  # Custom styling for bypass modal
-└── janitorCloudflareBypass.html # Modal UI template
+SillyTavern-JanitorImporter/                 
+├── public/scripts/
+│   ├── templates/
+│   │   └── janitorCloudflareBypass.html
+│   └── utils.js
+├── src/endpoints/
+│   ├── characters.js
+│   └── content-manager.js
+├── .gitignore
+├── README.md
+├── install.ps1
+├── install.sh
+└── janitor-native-bypass.patch
 ```
 
 ## 🐛 Troubleshooting
